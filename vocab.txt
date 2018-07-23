@@ -1,0 +1,6 @@
+<unk>	4
+the	4
+something	2
+mat	2
+on	2
+cat	2
