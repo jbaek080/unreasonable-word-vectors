@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 from keras import backend as K
+from keras.losses import binary_crossentropy
 import numpy as np
 from keras.models import Sequential, Model
 from keras.layers import Input, Lambda, Dense, merge, dot
@@ -44,8 +45,18 @@ word_context_product = dot([word_embedding, cbow], axes=-1)
 negative_context_product = dot([negative_words_embedding, cbow], axes=-1)
 # The dot products are outputted
 model = Model(input=[word_index, context, negative_samples], output=[word_context_product, negative_context_product])
-# binary crossentropy is applied on the output
-model.compile(optimizer='rmsprop', loss='binary_crossentropy')
+
+def loss_mse(y_true, y_pred, alpha = .1):
+    i_woman = reverse_vocabulary['woman']
+    i_man = reverse_vocabulary['man']
+
+    woman = embedding[i_woman]
+    man = embedding[i_man]
+
+    return binary_crossentropy(y_true, y_pred) - alpha * np.cos(woman, man) 
+
+
+model.compile(optimizer='rmsprop', loss=loss_mse)
 print(model.summary())
 
 # model.fit_generator(V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary), samples_per_epoch=G.train_words, nb_epoch=1)
