@@ -10,7 +10,7 @@ from keras.optimizers import SGD
 from keras.objectives import mse
 from scipy.spatial.distance import cosine
 
-from sentences_generator import Sentences, GutenbergSentences
+from sentences_generator import Sentences, GutenbergSentences, BrownSentences
 import vocab_generator as V_gen
 import save_embeddings as S
 import global_settings as G
@@ -19,7 +19,7 @@ k = G.window_size # context windows size
 context_size = 2*k
 
 # Creating a sentence generator from Gutenberg corpus
-sentences = GutenbergSentences()
+sentences = BrownSentences()
 vocabulary = dict()
 V_gen.build_vocabulary(vocabulary, sentences)
 V_gen.filter_vocabulary_based_on(vocabulary, G.min_count)
@@ -45,44 +45,47 @@ cbow = Lambda(lambda x: K.mean(x, axis=1), output_shape=(G.embedding_dimension,)
 word_context_product = dot([word_embedding, cbow], axes=-1)
 negative_context_product = dot([negative_words_embedding, cbow], axes=-1)
 # The dot products are outputted
-model = Model(input=[word_index, context, negative_samples], output=[word_context_product, negative_context_product])
+model = Model(inputs=[word_index, context, negative_samples], outputs=[word_context_product, negative_context_product])
+
+
+model.compile(optimizer='rmsprop', loss='binary_crossentropy')
+print(model.summary())
+
+# model.fit_generator(V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary), samples_per_epoch=G.train_words, nb_epoch=1)
 
 i_woman = reverse_vocabulary['woman']
 i_man = reverse_vocabulary['man']
+word_embeddings = shared_embedding_layer.get_weights()[0]
+
+def loss_mse(y_true, y_pred, alpha = .1):
+    woman = word_embeddings[i_woman]
+    man = word_embeddings[i_man]
+    return binary_crossentropy(y_true, y_pred)# - alpha * cos_similarity(woman, man)
+
+gen = V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary) 
+model.fit_generator(gen, steps_per_epoch=len(vocabulary)/10, epochs=3)
+# Save the trained embedding
+S.save_embeddings("embedding.txt", shared_embedding_layer.get_weights()[0], vocabulary)
 
 def cos_similarity(a, b):
     return np.abs(-cosine(a, b) + 1)
 
 def similarity(w1, w2):
-    return cos_similarity(embedding[reverse_vocabulary[w1]], embedding[reverse_vocabulary[w2]])
+    return cos_similarity(word_embeddings[reverse_vocabulary[w1]], word_embeddings[reverse_vocabulary[w2]])
 
 def n_most_similar(word_inp, n=5):
     word_to_similarity = {}
-    for i in range(2, len(embedding) - 2):
+    for i in range(2, len(word_embeddings) - 2):
         word = non_reverse_vocabulary[i]
-        word_vector = embedding[i]
+        word_vector = word_embeddings[i]
         sim = similarity(word_inp, word)
         word_to_similarity[word] = sim
 
     top_n = sorted(word_to_similarity.items(), key=lambda x: -x[1])[:n]
     return top_n
 
-def loss_mse(y_true, y_pred, alpha = .1):
-    woman = embedding[i_woman]
-    man = embedding[i_man]
-    return binary_crossentropy(y_true, y_pred)# - alpha * cos_similarity(woman, man)
-
-
-model.compile(optimizer='rmsprop', loss=loss_mse)
-print(model.summary())
-
-# model.fit_generator(V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary), samples_per_epoch=G.train_words, nb_epoch=1)
-model.fit_generator(V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary), samples_per_epoch=10, nb_epoch=10)
-# Save the trained embedding
-S.save_embeddings("embedding.txt", shared_embedding_layer.get_weights()[0], vocabulary)
-
-print("similarity between woman and man: ", str(cos_similarity(embedding[i_woman], embedding[i_man])))
-print("similarity between husband and wife: ", str(cos_similarity(embedding[reverse_vocabulary['husband']], embedding[reverse_vocabulary['wife']])))
+print("similarity between woman and man: ", str(cos_similarity(word_embeddings[i_woman], word_embeddings[i_man])))
+print("similarity between husband and wife: ", str(cos_similarity(word_embeddings[reverse_vocabulary['husband']], word_embeddings[reverse_vocabulary['wife']])))
 
 # input_context = np.random.randint(10, size=(1, context_size))
 # input_word = np.random.randint(10, size=(1,))
