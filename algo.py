@@ -8,6 +8,7 @@ from keras.layers import Input, Lambda, Dense, merge, dot
 from keras.layers.embeddings import Embedding
 from keras.optimizers import SGD
 from keras.objectives import mse
+from scipy.spatial.distance import cosine
 
 from sentences_generator import Sentences, GutenbergSentences
 import vocab_generator as V_gen
@@ -22,7 +23,7 @@ sentences = GutenbergSentences()
 vocabulary = dict()
 V_gen.build_vocabulary(vocabulary, sentences)
 V_gen.filter_vocabulary_based_on(vocabulary, G.min_count)
-reverse_vocabulary = V_gen.generate_inverse_vocabulary_lookup(vocabulary, "vocab.txt")
+reverse_vocabulary, non_reverse_vocabulary = V_gen.generate_vocabulary_lookups(vocabulary, "vocab.txt")
 
 # generate embedding matrix with all values between -1/2d, 1/2d
 embedding = np.random.uniform(-1.0/2.0/G.embedding_dimension, 1.0/2.0/G.embedding_dimension, (G.vocab_size+3, G.embedding_dimension))
@@ -46,23 +47,42 @@ negative_context_product = dot([negative_words_embedding, cbow], axes=-1)
 # The dot products are outputted
 model = Model(input=[word_index, context, negative_samples], output=[word_context_product, negative_context_product])
 
-def loss_mse(y_true, y_pred, alpha = .1):
-    i_woman = reverse_vocabulary['woman']
-    i_man = reverse_vocabulary['man']
+i_woman = reverse_vocabulary['woman']
+i_man = reverse_vocabulary['man']
 
+def cos_similarity(a, b):
+    return np.abs(-cosine(a, b) + 1)
+
+def similarity(w1, w2):
+    return cos_similarity(embedding[reverse_vocabulary[w1]], embedding[reverse_vocabulary[w2]])
+
+def n_most_similar(word_inp, n=5):
+    word_to_similarity = {}
+    for i in range(2, len(embedding) - 2):
+        word = non_reverse_vocabulary[i]
+        word_vector = embedding[i]
+        sim = similarity(word_inp, word)
+        word_to_similarity[word] = sim
+
+    top_n = sorted(word_to_similarity.items(), key=lambda x: -x[1])[:n]
+    return top_n
+
+def loss_mse(y_true, y_pred, alpha = .1):
     woman = embedding[i_woman]
     man = embedding[i_man]
-
-    return binary_crossentropy(y_true, y_pred) - alpha * np.cos(woman, man) 
+    return binary_crossentropy(y_true, y_pred)# - alpha * cos_similarity(woman, man)
 
 
 model.compile(optimizer='rmsprop', loss=loss_mse)
 print(model.summary())
 
 # model.fit_generator(V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary), samples_per_epoch=G.train_words, nb_epoch=1)
-model.fit_generator(V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary), samples_per_epoch=10, nb_epoch=1)
+model.fit_generator(V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary), samples_per_epoch=10, nb_epoch=10)
 # Save the trained embedding
 S.save_embeddings("embedding.txt", shared_embedding_layer.get_weights()[0], vocabulary)
+
+print("similarity between woman and man: ", str(cos_similarity(embedding[i_woman], embedding[i_man])))
+print("similarity between husband and wife: ", str(cos_similarity(embedding[reverse_vocabulary['husband']], embedding[reverse_vocabulary['wife']])))
 
 # input_context = np.random.randint(10, size=(1, context_size))
 # input_word = np.random.randint(10, size=(1,))
