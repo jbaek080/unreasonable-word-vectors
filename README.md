@@ -1,4 +1,4 @@
-# unreasonble-word-vectors
+# unreasonable-word-vectors
 
 Word vectors are competent at logical tasks: many word vector models easily beat human averages on the Reading section of the Scholastic Aptitude Test (SAT) (https://www.cs.princeton.edu/sites/default/files/uploads/eugene_tang.pdf). However, perhaps related to this rigidity, many models struggle with understanding metaphorical speech, and even exhibit racist and sexist tendencies (https://arxiv.org/abs/1607.06520).
  
