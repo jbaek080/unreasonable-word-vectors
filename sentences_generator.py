@@ -1,4 +1,5 @@
 import codecs
+from nltk.corpus import gutenberg as g
 
 class Sentences(object):
 	"""docstring for Sentences"""
@@ -10,3 +11,14 @@ class Sentences(object):
 			for line in rf:
 				if line.strip():
 					yield line.strip().lower()
+        
+
+class GutenbergSentences(object):
+    """docstring for Gutenberg sentences"""
+    def __init__(self):
+        self.sentences = g.sents()
+
+    def __iter__(self):
+        for line in self.sentences:
+            yield " ".join(line).strip()
+
