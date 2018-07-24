@@ -9,7 +9,7 @@ from keras.layers.embeddings import Embedding
 from keras.optimizers import SGD
 from keras.objectives import mse
 
-from sentences_generator import Sentences
+from sentences_generator import Sentences, GutenbergSentences
 import vocab_generator as V_gen
 import save_embeddings as S
 import global_settings as G
@@ -17,8 +17,8 @@ import global_settings as G
 k = G.window_size # context windows size
 context_size = 2*k
 
-# Creating a sentence generator from demo file
-sentences = Sentences("sentences.txt")
+# Creating a sentence generator from Gutenberg corpus
+sentences = GutenbergSentences()
 vocabulary = dict()
 V_gen.build_vocabulary(vocabulary, sentences)
 V_gen.filter_vocabulary_based_on(vocabulary, G.min_count)
