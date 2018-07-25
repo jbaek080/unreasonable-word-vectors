@@ -12,7 +12,7 @@ from keras.optimizers import SGD
 from keras.objectives import mse
 from scipy.spatial.distance import cosine
 
-from sentences_generator import Sentences, GutenbergSentences, BrownSentences
+from sentences_generator import Sentences, GutenbergSentences, BrownSentences, ReutersSentences
 import vocab_generator as V_gen
 import save_embeddings as S
 import global_settings as G
@@ -66,15 +66,18 @@ def load_embeddings(filename):
     return embeddings
 
 if __name__ == "__main__":
-
-    sentences = BrownSentences()
+    #sentences = Sentences("WestburyLab.Wikipedia.Corpus.txt")
+    sentences = GutenbergSentences()
     vocabulary = dict()
     V_gen.build_vocabulary(vocabulary, sentences)
     V_gen.filter_vocabulary_based_on(vocabulary, G.min_count)
     reverse_vocabulary, non_reverse_vocabulary = V_gen.generate_vocabulary_lookups(vocabulary, "vocab.txt")
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    sess = tf.Session(config=config)
+    K.set_session(sess)
 
-    if sys.argv[1] == "new":
-
+    def load_google_news_model():
         print("Loading word2vec google news model")
         loc = './GoogleNews-vectors-negative300.bin'
         w2vmodel = gensim.models.KeyedVectors.load_word2vec_format(loc, binary=True)
@@ -89,70 +92,77 @@ if __name__ == "__main__":
             else:
                 r = np.random.uniform(-1.0/2.0/g_embed_dim, 1.0/2.0/g_embed_dim, (g_embed_dim,))
                 embedding.append(r)
-                
         embedding.append(np.random.uniform(-1.0/2.0/g_embed_dim, 1.0/2.0/g_embed_dim, (g_embed_dim,)))
         embedding.append(np.random.uniform(-1.0/2.0/g_embed_dim, 1.0/2.0/g_embed_dim, (g_embed_dim,)))
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-        sess = tf.Session(config=config)
-        K.set_session(sess)
+        embedding = np.array(embedding, dtype=np.float64)
+        print("Loading complete")
+        return embedding
 
+    if sys.argv[1] == "vanilla":
+        embedding = load_google_news_model()
+
+    elif sys.argv[1] == "new":
+        embedding = load_google_news_model()
+        #embedding = np.random.uniform(-1.0/2.0/G.embedding_dimension, 1.0/2.0/G.embedding_dimension, (G.vocab_size+3, G.embedding_dimension)) 
         k = G.window_size # context windows size
         context_size = 2*k
-        embedding = np.random.uniform(-1.0/2.0/G.embedding_dimension, 1.0/2.0/G.embedding_dimension, (G.vocab_size+3, G.embedding_dimension))
 
-        # Creating CBOW model
-        # Model has 3 inputs
-        # Current word index, context words indexes and negative sampled word indexes
-        word_index = Input(shape=(1,))
-        context = Input(shape=(context_size,))
-        negative_samples = Input(shape=(G.negative,))
-        # All the inputs are processed through a common embedding layer
-        shared_embedding_layer = Embedding(input_dim=(G.vocab_size+3), output_dim=G.embedding_dimension, weights=[embedding])
-        word_embedding = shared_embedding_layer(word_index)
-        context_embeddings = shared_embedding_layer(context)
-        negative_words_embedding = shared_embedding_layer(negative_samples)
-        # Now the context words are averaged to get the CBOW vector
-        cbow = Lambda(lambda x: K.mean(x, axis=1), output_shape=(G.embedding_dimension,))(context_embeddings)
-        # The context is multiplied (dot product) with current word and negative sampled words
-        word_context_product = dot([word_embedding, cbow], axes=-1)
-        negative_context_product = dot([negative_words_embedding, cbow], axes=-1)
-        # The dot products are outputted
-        model = Model(inputs=[word_index, context, negative_samples], outputs=[word_context_product, negative_context_product])
-        i_woman = reverse_vocabulary['woman']
-        i_man = reverse_vocabulary['man']
+        def model():
+            word_input = Input(shape=(1,))
+            context_input = Input(shape=(context_size,))
 
-        def loss_mse(y_true, y_pred, alpha = 0.5):
-            word_embeddings = shared_embedding_layer.get_weights()[0]
-            woman = word_embeddings[i_woman]
-            man = word_embeddings[i_man]
-            return binary_crossentropy(y_true, y_pred) - alpha * cos_similarity(woman, man)
+            def regularize(weight_matrix):
+                return 0.1 * (weight_matrix[reverse_vocabulary["man"]] - weight_matrix[reverse_vocabulary["woman"]]) ** 2
 
-        model.compile(optimizer='rmsprop', loss=loss_mse)
-        print(model.summary())
+            shared_embedding_layer = Embedding(input_dim=(G.vocab_size+3), output_dim=G.embedding_dimension, embeddings_regularizer = regularize, weights=[embedding])
+            word_embedding = shared_embedding_layer(word_input)
+            context_embeddings = shared_embedding_layer(context_input)
+            cbow = Lambda(lambda x: K.mean(x, axis=1), output_shape=(G.embedding_dimension,))(context_embeddings)
+            word_context_product = dot([word_embedding, cbow], axes=-1)
+            #loss_out = Lambda(customized_loss, output_shape=(1,), name='joint_loss')([word_input, word_context_product, shared_embedding_layer.get_weights()[0]])
+            model = Model(inputs=[word_input, context_input], outputs=[word_context_product])
 
-        word_embeddings = shared_embedding_layer.get_weights()[0]
+            return model, word_embedding, shared_embedding_layer
+
+        def custom_loss_wrapper(shared_embedding_layer, alpha=0.5):
+            def custom_loss(y_true, y_pred):
+                #return dot([word_embedding[reverse_vocabulary['woman']],
+                #        word_embedding[reverse_vocabulary['man']]], axes=-1)
+                print(shared_embedding_layer.get_weights()[0][reverse_vocabulary['woman']])
+                return binary_crossentropy(y_true, y_pred) * 0 - alpha * similarity('woman', 'man', shared_embedding_layer.get_weights()[0])
+            return custom_loss
+
+        def customized_loss(args):
+            y_true, y_pred, word_embedding = args
+            alpha = 0.1
+            #return binary_crossentropy(y_true, y_pred) - alpha * cos_similarity(woman, man)
+            return dot([word_embedding[reverse_vocabulary['woman']],
+                        word_embedding[reverse_vocabulary['man']]], axes=-1)
+            #return binary_crossentropy(y_true, y_pred) * 0 - alpha * similarity('woman', 'man', word_embedding)
+
+        m, w, s = model()
+        #m.compile(optimizer='rmsprop', loss={'joint_loss': lambda y_true, y_pred: y_pred})
+        m.compile(optimizer='rmsprop', loss=binary_crossentropy)
+        print(m.summary())
 
         gen = V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary) 
-        model.fit_generator(gen, steps_per_epoch=len(vocabulary)/5, epochs=1)
+        m.fit_generator(gen, steps_per_epoch=len(vocabulary)/5, epochs=1)
         # Save the trained embedding
         pickle.dump(shared_embedding_layer.get_weights()[0], open("embeddings.pkl", "wb"))
         S.save_embeddings("embedding.txt", shared_embedding_layer.get_weights()[0], vocabulary)
 
-        word_embeddings = shared_embedding_layer.get_weights()[0]
-        print("similarity between woman and man: ", str(cos_similarity(word_embeddings[i_woman], word_embeddings[i_man])))
-        print("similarity between husband and wife: ", str(cos_similarity(word_embeddings[reverse_vocabulary['husband']], word_embeddings[reverse_vocabulary['wife']])))
     else:
         print("loading embeddings", sys.argv[1])
         word_embeddings = pickle.load(open(sys.argv[1], 'rb'))
         print("embeddings loaded")
-        tsne = TSNE(perplexity=2,verbose=2).fit(word_embeddings[:600,:])
-        xdata = tsne.embedding_[:, 0]
-        ydata = tsne.embedding_[:, 1]
-        plt.scatter(xdata, ydata)
-        for label, x, y in zip(vocabulary, xdata, ydata): 
-            plt.annotate(label, xy=(x, y), xytext=(0, 0), textcoords='offset points')
-        plt.show()
+        if (len(sys.argv) == 2):
+            tsne = TSNE(perplexity=2,verbose=2,random_state=0,n_iter=3000).fit(word_embeddings[:1000,:])
+            xdata = tsne.embedding_[:, 0]
+            ydata = tsne.embedding_[:, 1]
+            plt.scatter(xdata, ydata)
+            for label, x, y in zip(vocabulary, xdata, ydata): 
+                plt.annotate(label, xy=(x, y), xytext=(0, 0), textcoords='offset points')
+            plt.show()
 
 
 
