@@ -1,6 +1,7 @@
 import codecs
 from nltk.corpus import gutenberg as g
 from nltk.corpus import brown as b
+from nltk.corpus import reuters
 
 class Sentences(object):
 	"""docstring for Sentences"""
@@ -31,4 +32,13 @@ class BrownSentences(object):
     def __iter__(self):
         for line in self.sentences:
             yield " ".join(line).strip().lower()
+
+class ReutersSentences(object):
+    def __init__(self):
+        self.sentences = reuters.sents()
+
+    def __iter__(self):
+        for line in self.sentences:
+            yield " ".join(line).strip().lower()
+
 

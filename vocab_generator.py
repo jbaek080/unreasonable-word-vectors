@@ -132,14 +132,12 @@ def pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary):
                                                         context_word_indexes.append(0)
                                                 else:
                                                         context_word_indexes.append(sent_seq[(i+j)]) 
-                                # get negative samples
-                                negative_samples = get_negative_samples(current_word_index)
                                 context_word_indexes = np.array([context_word_indexes])
                                 # yield a batch here
                                 # batch should be a tuple of inputs and targets
                                 # print([current_word_index.shape, context_word_indexes.shape, negative_samples.shape], [np.array([1.0]).shape, np.zeros((1,G.negative)).shape])
                                 # print([current_word_index, context_word_indexes, negative_samples], [np.array([1.0]), np.zeros((1,G.negative))])
-                                yield [current_word_index, context_word_indexes, negative_samples], [np.array([1.0]), np.zeros((1,G.negative))]
+                                yield [current_word_index, context_word_indexes], [np.array([1.0])]
 
 def sentences_to_index_sequences(sentences, vocabulary, save_vocab_filepath, save_index_filepath):
         # generate inverse vocabulary lookup

@@ -2,5 +2,9 @@ numpy
 tensorflow
 keras
 nltk 
+jupyter
+sklearn
+scipy
+
 
 

@@ -1,7 +1,7 @@
 
 UNKNOWN_WORD = "<unk>"
 
-embedding_dimension = 100
+embedding_dimension = 300
 min_count = 2
 window_size = 3
 sample = 1e-3
