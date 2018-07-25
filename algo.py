@@ -16,6 +16,9 @@ import save_embeddings as S
 import global_settings as G
 import sys
 import pickle
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+from matplotlib import pyplot as plt
 
 sentences = BrownSentences()
 vocabulary = dict()
@@ -119,4 +122,11 @@ if __name__ == "__main__":
         print("loading embeddings", sys.argv[1])
         word_embeddings = pickle.load(open(sys.argv[1], 'rb'))
         print("embeddings loaded")
+        pca = PCA(n_components=20).fit(word_embeddings)
+        tsne = TSNE().fit(pca.components_)
+        xdata = tsne.embedding_[:, 0]
+        ydata = tsne.embedding_[:, 1]
+        plt.scatter(xdata, ydata)
+
+
 
