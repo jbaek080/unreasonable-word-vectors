@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 import gensim
-
 import tensorflow as tf
+
 from keras import backend as K
 from keras.losses import binary_crossentropy
 import numpy as np
@@ -163,6 +163,4 @@ if __name__ == "__main__":
             for label, x, y in zip(vocabulary, xdata, ydata): 
                 plt.annotate(label, xy=(x, y), xytext=(0, 0), textcoords='offset points')
             plt.show()
-
-
 
