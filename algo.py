@@ -1,5 +1,7 @@
 from __future__ import absolute_import
+import gensim
 
+import tensorflow as tf
 from keras import backend as K
 from keras.losses import binary_crossentropy
 import numpy as np
@@ -19,12 +21,6 @@ import pickle
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from matplotlib import pyplot as plt
-
-sentences = BrownSentences()
-vocabulary = dict()
-V_gen.build_vocabulary(vocabulary, sentences)
-V_gen.filter_vocabulary_based_on(vocabulary, G.min_count)
-reverse_vocabulary, non_reverse_vocabulary = V_gen.generate_vocabulary_lookups(vocabulary, "vocab.txt")
 
 def cos_similarity(a, b):
     return np.abs(-cosine(a, b) + 1)
@@ -57,8 +53,6 @@ def analogy(a, b, c, word_embeddings, n = 5):
     top_n = sorted(word_to_similarity.items(), key=lambda x: -x[1])[:n]
     return top_n
     
-
-
 def load_embeddings(filename):
     embeddings = []
     with open(filename) as f:
@@ -72,7 +66,37 @@ def load_embeddings(filename):
     return embeddings
 
 if __name__ == "__main__":
+
+    sentences = BrownSentences()
+    vocabulary = dict()
+    V_gen.build_vocabulary(vocabulary, sentences)
+    V_gen.filter_vocabulary_based_on(vocabulary, G.min_count)
+    reverse_vocabulary, non_reverse_vocabulary = V_gen.generate_vocabulary_lookups(vocabulary, "vocab.txt")
+
     if sys.argv[1] == "new":
+
+        print("Loading word2vec google news model")
+        loc = './GoogleNews-vectors-negative300.bin'
+        w2vmodel = gensim.models.KeyedVectors.load_word2vec_format(loc, binary=True)
+        print("loading complete")
+        g_embed_dim = 300
+        unk = [0 for _ in range(300)]
+        embedding = [unk, unk]
+        for i in range(2, len(non_reverse_vocabulary) + 2):
+            word = non_reverse_vocabulary[i]
+            if word in w2vmodel:
+                embedding.append(w2vmodel[word])
+            else:
+                r = np.random.uniform(-1.0/2.0/g_embed_dim, 1.0/2.0/g_embed_dim, (g_embed_dim,))
+                embedding.append(r)
+                
+        embedding.append(np.random.uniform(-1.0/2.0/g_embed_dim, 1.0/2.0/g_embed_dim, (g_embed_dim,)))
+        embedding.append(np.random.uniform(-1.0/2.0/g_embed_dim, 1.0/2.0/g_embed_dim, (g_embed_dim,)))
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        sess = tf.Session(config=config)
+        K.set_session(sess)
+
         k = G.window_size # context windows size
         context_size = 2*k
         embedding = np.random.uniform(-1.0/2.0/G.embedding_dimension, 1.0/2.0/G.embedding_dimension, (G.vocab_size+3, G.embedding_dimension))
@@ -98,11 +122,11 @@ if __name__ == "__main__":
         i_woman = reverse_vocabulary['woman']
         i_man = reverse_vocabulary['man']
 
-        def loss_mse(y_true, y_pred, alpha = .1):
+        def loss_mse(y_true, y_pred, alpha = 0.5):
             word_embeddings = shared_embedding_layer.get_weights()[0]
             woman = word_embeddings[i_woman]
             man = word_embeddings[i_man]
-            return binary_crossentropy(y_true, y_pred)# - alpha * cos_similarity(woman, man)
+            return binary_crossentropy(y_true, y_pred) - alpha * cos_similarity(woman, man)
 
         model.compile(optimizer='rmsprop', loss=loss_mse)
         print(model.summary())
@@ -110,7 +134,7 @@ if __name__ == "__main__":
         word_embeddings = shared_embedding_layer.get_weights()[0]
 
         gen = V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary) 
-        model.fit_generator(gen, steps_per_epoch=len(vocabulary), epochs=1)
+        model.fit_generator(gen, steps_per_epoch=len(vocabulary)/5, epochs=1)
         # Save the trained embedding
         pickle.dump(shared_embedding_layer.get_weights()[0], open("embeddings.pkl", "wb"))
         S.save_embeddings("embedding.txt", shared_embedding_layer.get_weights()[0], vocabulary)
