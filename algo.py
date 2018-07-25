@@ -146,11 +146,13 @@ if __name__ == "__main__":
         print("loading embeddings", sys.argv[1])
         word_embeddings = pickle.load(open(sys.argv[1], 'rb'))
         print("embeddings loaded")
-        pca = PCA(n_components=20).fit(word_embeddings)
-        tsne = TSNE().fit(pca.components_)
+        tsne = TSNE(perplexity=2,verbose=2).fit(word_embeddings[:600,:])
         xdata = tsne.embedding_[:, 0]
         ydata = tsne.embedding_[:, 1]
         plt.scatter(xdata, ydata)
+        for label, x, y in zip(vocabulary, xdata, ydata): 
+            plt.annotate(label, xy=(x, y), xytext=(0, 0), textcoords='offset points')
+        plt.show()
 
 
 
