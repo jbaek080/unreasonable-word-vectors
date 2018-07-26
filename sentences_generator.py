@@ -9,10 +9,15 @@ class Sentences(object):
 		self.filepath = filepath
 	
 	def __iter__(self):
-		with codecs.open(self.filepath, "r", "utf-8") as rf:
-			for line in rf:
-				if line.strip():
-					yield line.strip().lower()
+            max_lines = 100000
+            lines = 0
+            with codecs.open(self.filepath, "r", "utf-8") as rf:
+                for line in rf:
+                    lines += 1
+                    if line.strip():
+                        yield line.strip().lower()
+                    if lines >= max_lines:
+                        break
         
 
 class GutenbergSentences(object):

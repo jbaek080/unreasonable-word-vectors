@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 import gensim
 import tensorflow as tf
+import keras
 
 from keras import backend as K
 from keras.losses import binary_crossentropy
@@ -66,8 +67,8 @@ def load_embeddings(filename):
     return embeddings
 
 if __name__ == "__main__":
-    #sentences = Sentences("WestburyLab.Wikipedia.Corpus.txt")
-    sentences = GutenbergSentences()
+    sentences = Sentences("WestburyLab.Wikipedia.Corpus.txt")
+    #sentences = GutenbergSentences()
     vocabulary = dict()
     V_gen.build_vocabulary(vocabulary, sentences)
     V_gen.filter_vocabulary_based_on(vocabulary, G.min_count)
@@ -81,7 +82,6 @@ if __name__ == "__main__":
         print("Loading word2vec google news model")
         loc = './GoogleNews-vectors-negative300.bin'
         w2vmodel = gensim.models.KeyedVectors.load_word2vec_format(loc, binary=True)
-        print("loading complete")
         g_embed_dim = 300
         unk = [0 for _ in range(300)]
         embedding = [unk, unk]
@@ -111,8 +111,10 @@ if __name__ == "__main__":
             word_input = Input(shape=(1,))
             context_input = Input(shape=(context_size,))
 
+            es = keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
+
             def regularize(weight_matrix):
-                return 0.1 * (weight_matrix[reverse_vocabulary["man"]] - weight_matrix[reverse_vocabulary["woman"]]) ** 2
+                return 0.1 * (weight_matrix[reverse_vocabulary["disease"]] - weight_matrix[reverse_vocabulary["crime"]]) ** 2
 
             shared_embedding_layer = Embedding(input_dim=(G.vocab_size+3), output_dim=G.embedding_dimension, embeddings_regularizer = regularize, weights=[embedding])
             word_embedding = shared_embedding_layer(word_input)
@@ -124,6 +126,7 @@ if __name__ == "__main__":
 
             return model, word_embedding, shared_embedding_layer
 
+        """
         def custom_loss_wrapper(shared_embedding_layer, alpha=0.5):
             def custom_loss(y_true, y_pred):
                 #return dot([word_embedding[reverse_vocabulary['woman']],
@@ -139,6 +142,7 @@ if __name__ == "__main__":
             return dot([word_embedding[reverse_vocabulary['woman']],
                         word_embedding[reverse_vocabulary['man']]], axes=-1)
             #return binary_crossentropy(y_true, y_pred) * 0 - alpha * similarity('woman', 'man', word_embedding)
+        """
 
         m, w, s = model()
         #m.compile(optimizer='rmsprop', loss={'joint_loss': lambda y_true, y_pred: y_pred})
@@ -146,7 +150,7 @@ if __name__ == "__main__":
         print(m.summary())
 
         gen = V_gen.pretraining_batch_generator(sentences, vocabulary, reverse_vocabulary) 
-        m.fit_generator(gen, steps_per_epoch=len(vocabulary)/5, epochs=1)
+        m.fit_generator(gen, steps_per_epoch=len(vocabulary)/100, epochs=1)
         # Save the trained embedding
         pickle.dump(shared_embedding_layer.get_weights()[0], open("embeddings.pkl", "wb"))
         S.save_embeddings("embedding.txt", shared_embedding_layer.get_weights()[0], vocabulary)
