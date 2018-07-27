@@ -114,7 +114,11 @@ if __name__ == "__main__":
             es = keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0, patience=0, verbose=0, mode='auto')
 
             def regularize(weight_matrix):
-                return 0.1 * (weight_matrix[reverse_vocabulary["disease"]] - weight_matrix[reverse_vocabulary["crime"]]) ** 2
+                return (0.1 * (weight_matrix[reverse_vocabulary["woman"]] - weight_matrix[reverse_vocabulary["man"]]) ** 2
+                     + 0.1 * (weight_matrix[reverse_vocabulary["she"]] - weight_matrix[reverse_vocabulary["he"]]) ** 2
+                     + 0.1 * (weight_matrix[reverse_vocabulary["her"]] - weight_matrix[reverse_vocabulary["him"]]) ** 2
+                     + 0.1 * (weight_matrix[reverse_vocabulary["herself"]] - weight_matrix[reverse_vocabulary["himself"]]) ** 2
+                     + 0.1 * (weight_matrix[reverse_vocabulary["female"]] - weight_matrix[reverse_vocabulary["male"]]) ** 2)
 
             shared_embedding_layer = Embedding(input_dim=(G.vocab_size+3), output_dim=G.embedding_dimension, embeddings_regularizer = regularize, weights=[embedding])
             word_embedding = shared_embedding_layer(word_input)
